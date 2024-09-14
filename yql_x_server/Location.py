@@ -34,8 +34,12 @@ class SearchLocation:
             self.country = Country(metadata['name'], metadata['name'][0:3].upper())
         else:
             self.country = countries.get(metadata["iso"])
+        
+        if metadata['type'] != "state":
+            self.country_name = f"{metadata['state']}, {self.country.name}"
+        else:
+            self.country_name = self.country.name
 
-        self.country_name = self.country.name
         self.location_id = "ASXX0075"
         self.name = metadata['name']
         self.woeid = metadata['woeid']

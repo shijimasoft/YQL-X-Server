@@ -83,27 +83,26 @@ def getTickerChartForRange(ticker, range):
         return cachedChartResponses[cache_key]['data']
 
     # If not cached or cache has expired, fetch the data
-    match range:
-        case "1d":
-            interval = "15m"
-        case "5d":
-            interval = "1d"
-        case "1m":
-            range = "1mo"
-            interval = "1h"
-        case "3m":
-            range = "3mo"
-            interval = "1d"
-        case "6m":
-            range = "6mo"
-            interval = "1wk"
-        case "1y":
-            interval = "1wk"
-        case "2y":
-            interval = "1wk"
-        case _:
-            print("Unknown range: " + range)
-            return None
+    if range == "1d":
+        interval = "15m"
+    elif range == "5d":
+        interval = "1d"
+    elif range == "1m":
+        range = "1mo"
+        interval = "1h"
+    elif range == "3m":
+        range = "3mo"
+        interval = "1d"
+    elif range == "6m":
+        range = "6mo"
+        interval = "1wk"
+    elif range == "1y":
+        interval = "1wk"
+    elif range == "2y":
+        interval = "1wk"
+    else:
+        print(f"Unknown range: {range}")
+        return None
 
     print("Interval = " + interval + " for range " + range)
     data_dict = yfinance.Ticker(ticker).history(period=range, interval=interval).to_dict()

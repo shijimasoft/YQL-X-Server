@@ -14,12 +14,6 @@ import requests
 app = FastAPI()
 sys.stdout.reconfigure(encoding='utf-8')
 
-genPath = Path(args.generated_woeids_path)
-if not os.path.exists(genPath):
-    with open(genPath, "w") as database:
-        database.write(json.dumps({}))
-        database.close()
-
 yql = YQL()
 yql_router = APIRouter(default_response_class=PlainTextResponse)
 dgw_router = APIRouter(default_response_class=PlainTextResponse)

@@ -1,22 +1,17 @@
-import json
-import mmap
-import os
+import sqlite3
 import re
-import threading
-from pathlib import Path
-from yql_x_server.args import args
 
 class YQL:
     def __init__(self):
-        # Load json into memory
-        self.json_disk_file = open(Path(args.geo_database_path), "r")
-        if os.name == 'nt':
-            self.json_mem_file = mmap.mmap(self.json_disk_file.fileno(), 0, access=mmap.ACCESS_READ)
-        else:
-            self.json_mem_file = mmap.mmap(self.json_disk_file.fileno(), 0, prot=mmap.PROT_READ)
-        self.json_disk_file.close()
-        self.json_file = json.load(self.json_mem_file)
-        self.generatedFileLock = threading.Lock()
+        sqlite_disk_file = sqlite3.connect("yqldb.sqlite")
+        self.sqlite_mem_file = sqlite3.connect(":memory:")
+
+        # Load disk database into ram
+        sqlite_disk_file.backup(self.sqlite_mem_file)
+        sqlite_disk_file.close()
+
+        # Only in the memory database
+        self.sqlite_mem_file.execute("CREATE TABLE Generated (woeid INTEGER UNSIGNED PRIMARY KEY, name TEXT NOT NULL)")
 
     def getWoeidsInQuery(self, q, formatted=False, Legacy=False):
         if formatted:
@@ -44,41 +39,25 @@ class YQL:
         except:
             # Generate woeid from name, store the characters in unicode int format for decoding later
             print("Generating woeid from name, " + name)
-            with self.generatedFileLock:
-                generatedFile = open(Path(args.generated_woeids_path), "r+")
-                generatedWoeids = json.load(generatedFile)
-                woeid = ""
-                woeidArray = []
-                for letter in name:
-                    unicode = str(ord(letter))
-                    woeid += unicode
-                    woeidArray.append(unicode)
-                if not any(woeid in v for v in generatedWoeids):
-                    print("Adding woeid to generatedWoeids.json")
-                    generatedWoeids.update({woeid: woeidArray})
-                    generatedFile.seek(0)
-                    generatedFile.write(json.dumps(generatedWoeids))
-                    generatedFile.truncate()
-                else:
-                    print("Woeid already in generatedWoeids.json")
-                generatedFile.close()
-                return woeid
+            woeid = ""
+            for letter in name:
+                unicode = str(ord(letter))
+                woeid += unicode
+            generated_woeids = self.sqlite_mem_file.execute("SELECT woeid FROM Generated").fetchall()
+            if not (woeid,) in generated_woeids:
+                self.sqlite_mem_file.execute("INSERT INTO Generated (woeid) VALUES (?)", (woeid,))
+                self.sqlite_mem_file.commit()
+            return woeid
 
     def getNamesForWoeids(self, woeids):
         names = []
-        
         for woeid in woeids:
-            try:
-                names.append(self.json_file["woeid"][woeid])
-            except Exception as e:
-                generatedFile = open(Path(args.generated_woeids_path), "r")
-                generatedWoeids = json.load(generatedFile)
-                if not generatedWoeids:
-                    continue
-                name = ""
-                for unicodeChar in generatedWoeids[woeid]:
-                    name += chr(int(unicodeChar))
-                names.append(name)
+            name = self.sqlite_mem_file.execute(
+                "SELECT name FROM State WHERE woeid = ? UNION SELECT name FROM County WHERE woeid = ? UNION SELECT name FROM LocalAdmin WHERE woeid = ?",
+                (woeid, woeid, woeid)).fetchone()
+            if name == None:
+                name = self.sqlite_mem_file.execute("SELECT name FROM Generated WHERE woeid = ?", (woeid,)).fetchone()
+            names.append(name[0])
         return names
 
     def getNamesForWoeidsInQ(self, q, formatted=False, nameInQuery=False, Legacy=False):
@@ -99,37 +78,59 @@ class YQL:
 
     def getSimilarName(self, q):
         resultsList = []
-        for i in self.json_file["small"].items():
-            if q.lower() in i[0].lower():
+        query_results = self.sqlite_mem_file.execute("SELECT * FROM County")
+        for i in query_results.fetchall():
+            if i[2].lower().startswith(q.lower()):
+                state = self.sqlite_mem_file.execute("SELECT name FROM State WHERE woeid = ?", (i[3],)).fetchone()
                 resultsList.append({
-                    "name": i[0],
-                    "iso": self.json_file["small"][i[0]][1],
-                    "woeid": self.json_file["small"][i[0]][0],
+                    "name": i[2],
+                    "state": state[0],
+                    "iso": i[1],
+                    "woeid": i[0],
                     "type": "small"
                 })
-        for i in self.json_file["city"].items():
-            if q.lower() in i[0].lower() and not i[0] in resultsList:
+        query_results = self.sqlite_mem_file.execute("SELECT * FROM LocalAdmin")
+        for i in query_results.fetchall():
+            if i[2].lower().startswith(q.lower()):
+                county = self.sqlite_mem_file.execute("SELECT * FROM County WHERE woeid = ?", (i[3],)).fetchone()
+                state = self.sqlite_mem_file.execute("SELECT name FROM State WHERE woeid = ?", (county[3],)).fetchone()
                 resultsList.append({
-                    "name": i[0],
-                    "iso": self.json_file["city"][i[0]][1],
-                    "woeid": self.json_file["city"][i[0]][0],
+                    "name": i[2],
+                    "state": state[0],
+                    "iso": i[1],
+                    "woeid": i[0],
                     "type": "city"
                 })
-        for i in self.json_file["state"].items():
-            if q.lower() in i[0].lower() and not i[0] in resultsList:
+        query_results = self.sqlite_mem_file.execute("SELECT * FROM Town")
+        for i in query_results.fetchall():
+            if i[2].lower().startswith(q.lower()):
+                county = self.sqlite_mem_file.execute("SELECT * FROM County WHERE woeid = ?", (i[3],)).fetchone()
+                if county == None:
+                    continue
+                state = self.sqlite_mem_file.execute("SELECT name FROM State WHERE woeid = ?", (county[3],)).fetchone()
                 resultsList.append({
-                    "name": i[0],
-                    "iso": self.json_file["state"][i[0]][1],
-                    "woeid": self.json_file["state"][i[0]][0],
+                    "name": i[2],
+                    "state": state[0],
+                    "iso": i[1],
+                    "woeid": i[0],
+                    "type": "city"
+                })
+        query_results = self.sqlite_mem_file.execute("SELECT * FROM State")
+        for i in query_results.fetchall():
+            if i[2].lower().startswith(q.lower()):
+                resultsList.append({
+                    "name": i[2],
+                    "state": "",
+                    "iso": i[1],
+                    "woeid": i[0],
                     "type": "state"
                 })
-        for i in self.json_file["country"].items():
-            if q.lower() in i[0].lower() and not i[0] in resultsList:
-                resultsList.append({
-                    "name": i[0],
-                    "iso": self.json_file["country"][i[0]][1],
-                    "woeid": self.json_file["country"][i[0]][0],
-                    "type": "country"
-                })
 
-        return resultsList
+        # Check and remove duplicates
+        seen = set()
+        places = []
+        for place in resultsList:
+            if place['name']+place['state'] not in seen:
+                places.append(place)
+                seen.add(place['name']+place['state'])
+        return places

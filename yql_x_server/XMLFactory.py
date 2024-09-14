@@ -64,41 +64,40 @@ def StocksResultsFactory(q):
         
 
 def XMLStocksFactoryDGW(q, reqType):
-    match reqType:
-        case "getquotes":
-            symbols = StocksResultsFactory(q)
-            xml = stocks_getquotes_template.render({
-                "type": reqType,
-                "timestamp": time.time(),
-                "count": len(symbols),
-                "symbols": symbols
-            })
-        case "getchart":
-            _range = parseStocksXML(q)["range"]
-            info: Symbol = StocksResultsFactory(q)[0]
-            ticker = info.name
-            pointData = getTickerChartForRange(ticker, _range)
-            if not pointData:
-                return "Invalid ticker or range"
-            xml = stocks_getchart_template.render({
-                "type": reqType,
-                "timestamp": time.time(),
-                "count": len(pointData),
-                "symbol_name": ticker,
-                "market_open": info.open,
-                "market_close": info.previous_close,
-                "points": pointData
-            })
-        case "getnews":
-            posts = GetBlogPosts()
-            xml = stocks_getnews_template.render({
-                "count": len(posts)+1,
-                "posts": posts
-            })
-        case "getsymbol":
-            return XMLStocksFactoryDGW(q, "getquotes")
-        case _:
-            return "Invalid request type"
+    if reqType == "getquotes":
+        symbols = StocksResultsFactory(q)
+        xml = stocks_getquotes_template.render({
+            "type": reqType,
+            "timestamp": time.time(),
+            "count": len(symbols),
+            "symbols": symbols
+        })
+    elif reqType == "getchart":
+        _range = parseStocksXML(q)["range"]
+        info: Symbol = StocksResultsFactory(q)[0]
+        ticker = info.name
+        pointData = getTickerChartForRange(ticker, _range)
+        if not pointData:
+            return "Invalid ticker or range"
+        xml = stocks_getchart_template.render({
+            "type": reqType,
+            "timestamp": time.time(),
+            "count": len(pointData),
+            "symbol_name": ticker,
+            "market_open": info.open,
+            "market_close": info.previous_close,
+            "points": pointData
+        })
+    elif reqType == "getnews":
+        posts = GetBlogPosts()
+        xml = stocks_getnews_template.render({
+            "count": len(posts)+1,
+            "posts": posts
+        })
+    elif reqType == "getsymbol":
+        return XMLStocksFactoryDGW(q, "getquotes")
+    else:
+        return "Invalid request type"
     return format_xml(xml)
    
 def XMLWeatherFactoryYQL(q, yql: YQL, Legacy=False, Search=False):
