@@ -45,7 +45,7 @@ class YQL:
                 woeid += unicode
             generated_woeids = self.sqlite_mem_file.execute("SELECT woeid FROM Generated").fetchall()
             if not (woeid,) in generated_woeids:
-                self.sqlite_mem_file.execute("INSERT INTO Generated (woeid) VALUES (?)", (woeid,))
+                self.sqlite_mem_file.execute("INSERT INTO Generated (woeid, name) VALUES (?, ?)", (woeid, name))
                 self.sqlite_mem_file.commit()
             return woeid
 
