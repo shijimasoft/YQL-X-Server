@@ -84,8 +84,10 @@ county_names = {county[2] for county in grouped_data["County"]}
 
 optimized_town = [town for town in grouped_data["Town"] if town[2] not in local_admin_names]
 optimized_town = [town for town in optimized_town if town[2] not in county_names]
+optimized_local = [local for local in grouped_data["LocalAdmin"] if local[2] not in county_names]
 
 grouped_data["Town"] = optimized_town
+grouped_data["LocalAdmin"] = optimized_local
 
 for table in table_order:
     insert_data(table, grouped_data[table])

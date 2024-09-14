@@ -93,6 +93,8 @@ class YQL:
         for i in query_results.fetchall():
             if i[2].lower().startswith(q.lower()):
                 county = self.sqlite_mem_file.execute("SELECT * FROM County WHERE woeid = ?", (i[3],)).fetchone()
+                if county == None:
+                    continue
                 state = self.sqlite_mem_file.execute("SELECT name FROM State WHERE woeid = ?", (county[3],)).fetchone()
                 resultsList.append({
                     "name": i[2],
@@ -133,4 +135,5 @@ class YQL:
             if place['name']+place['state'] not in seen:
                 places.append(place)
                 seen.add(place['name']+place['state'])
+
         return places
