@@ -57,7 +57,10 @@ class YQL:
                 (woeid, woeid, woeid)).fetchone()
             if name == None:
                 name = self.sqlite_mem_file.execute("SELECT name FROM Generated WHERE woeid = ?", (woeid,)).fetchone()
-            names.append(name[0])
+            if name != None:
+                names.append(name[0])
+            else:
+                continue
         return names
 
     def getNamesForWoeidsInQ(self, q, formatted=False, nameInQuery=False, Legacy=False):
